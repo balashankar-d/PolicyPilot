@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import './Auth.css';
 
 const AuthForm = () => {
@@ -12,13 +13,12 @@ const AuthForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { login, signup, error, clearError } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLocalError('');
     clearError();
-
-    console.log('Form submitted, isLogin:', isLogin, 'email:', email);
 
     // Validation
     if (!email || !password) {
@@ -38,24 +38,21 @@ const AuthForm = () => {
     }
 
     setIsSubmitting(true);
-    console.log('Starting API call...');
 
     try {
       let result;
       if (isLogin) {
-        console.log('Calling login...');
         result = await login(email, password);
       } else {
-        console.log('Calling signup...');
         result = await signup(email, password, fullName);
       }
 
-      console.log('Result:', result);
-      if (!result.success) {
+      if (result.success) {
+        navigate('/chat');
+      } else {
         setLocalError(result.error);
       }
     } catch (err) {
-      console.error('Submit error:', err);
       setLocalError(err.message);
     } finally {
       setIsSubmitting(false);
@@ -77,19 +74,19 @@ const AuthForm = () => {
       <div className="auth-card">
         <div className="auth-header">
           <h1>📚 PolicyPilot</h1>
-          <p>Your intelligent document assistant</p>
+          <p>Sign in to upload documents and start chatting</p>
         </div>
 
         <div className="auth-tabs">
           <button
             className={`auth-tab ${isLogin ? 'active' : ''}`}
-            onClick={() => setIsLogin(true)}
+            onClick={() => { setIsLogin(true); setLocalError(''); clearError(); }}
           >
             Login
           </button>
           <button
             className={`auth-tab ${!isLogin ? 'active' : ''}`}
-            onClick={() => setIsLogin(false)}
+            onClick={() => { setIsLogin(false); setLocalError(''); clearError(); }}
           >
             Sign Up
           </button>
@@ -111,26 +108,26 @@ const AuthForm = () => {
           )}
 
           <div className="form-group">
-            <label htmlFor="email">Email *</label>
+            <label htmlFor="email">Email</label>
             <input
               type="email"
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
+              placeholder="you@example.com"
               required
               disabled={isSubmitting}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Password *</label>
+            <label htmlFor="password">Password</label>
             <input
               type="password"
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
+              placeholder="At least 6 characters"
               required
               disabled={isSubmitting}
             />
@@ -138,13 +135,13 @@ const AuthForm = () => {
 
           {!isLogin && (
             <div className="form-group">
-              <label htmlFor="confirmPassword">Confirm Password *</label>
+              <label htmlFor="confirmPassword">Confirm Password</label>
               <input
                 type="password"
                 id="confirmPassword"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
+                placeholder="Re-enter your password"
                 required
                 disabled={isSubmitting}
               />
@@ -165,7 +162,7 @@ const AuthForm = () => {
             {isSubmitting ? (
               <span className="loading-spinner"></span>
             ) : (
-              isLogin ? 'Login' : 'Sign Up'
+              isLogin ? 'Sign In' : 'Create Account'
             )}
           </button>
         </form>
@@ -174,7 +171,7 @@ const AuthForm = () => {
           <p>
             {isLogin ? "Don't have an account?" : "Already have an account?"}
             <button onClick={toggleMode} className="auth-link">
-              {isLogin ? 'Sign Up' : 'Login'}
+              {isLogin ? 'Sign Up' : 'Sign In'}
             </button>
           </p>
         </div>

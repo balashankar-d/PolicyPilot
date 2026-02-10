@@ -1,0 +1,169 @@
+/* ===== Auth Page Styles ===== */
+.auth-page {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+}
+
+.auth-page-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-alt, #F8FAFC);
+}
+
+.auth-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #E2E8F0;
+  border-top-color: #4F46E5;
+  border-radius: 50%;
+  animation: authSpin 0.8s linear infinite;
+}
+
+@keyframes authSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Left Branding Panel --- */
+.auth-page-left {
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 40px;
+  position: relative;
+}
+
+.auth-back-btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  align-self: flex-start;
+}
+
+.auth-back-btn:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+.auth-page-branding {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.auth-brand-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.auth-page-branding h1 {
+  font-size: 2.4rem;
+  font-weight: 800;
+  margin: 0 0 12px 0;
+  letter-spacing: -0.5px;
+}
+
+.auth-brand-tagline {
+  font-size: 1.1rem;
+  opacity: 0.85;
+  margin: 0 0 48px 0;
+  line-height: 1.5;
+}
+
+.auth-brand-features {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.auth-brand-feature {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.auth-feature-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.auth-brand-feature strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.auth-brand-feature p {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+/* --- Right Form Panel --- */
+.auth-page-right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F8FAFC;
+  padding: 40px;
+}
+
+/* Override AuthForm container styles when inside auth page */
+.auth-page-right .auth-container {
+  min-height: auto;
+  background: transparent;
+  padding: 0;
+}
+
+.auth-page-right .auth-card {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  border: 1px solid #E2E8F0;
+  max-width: 440px;
+  width: 100%;
+}
+
+/* --- Responsive --- */
+@media (max-width: 900px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-page-left {
+    padding: 32px 24px;
+    min-height: auto;
+  }
+
+  .auth-page-branding {
+    text-align: center;
+    align-items: center;
+  }
+
+  .auth-brand-features {
+    display: none;
+  }
+
+  .auth-brand-tagline {
+    margin-bottom: 0;
+  }
+
+  .auth-back-btn {
+    align-self: center;
+    margin-bottom: 16px;
+  }
+
+  .auth-page-right {
+    padding: 24px;
+  }
+}
