@@ -1,0 +1,82 @@
+/* App.css */
+.App {
+  text-align: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #333;
+}
+
+.App-header {
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 20px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.App-header h1 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 2.5em;
+  font-weight: bold;
+}
+
+.App-header p {
+  margin: 0 0 15px 0;
+  color: #666;
+  font-size: 1.1em;
+}
+
+.system-status {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  font-size: 0.9em;
+  color: #555;
+}
+
+.system-status span {
+  background: #f0f0f0;
+  padding: 5px 10px;
+  border-radius: 15px;
+  border: 1px solid #ddd;
+}
+
+.App-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0 20px 20px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.upload-section {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.chat-section {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .App-main {
+    flex-direction: row;
+  }
+  
+  .upload-section {
+    flex: 1;
+    min-width: 300px;
+  }
+  
+  .chat-section {
+    flex: 2;
+  }
+}
