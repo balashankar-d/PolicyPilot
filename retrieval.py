@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Retriever:
-    """Handles document retrieval for RAG queries."""
+    """Handles document retrieval for RAG queries with user isolation support."""
     
     def __init__(self, vector_store: VectorStore, embedding_model: EmbeddingModel, 
                  top_k: int = 5, similarity_threshold: float = 0.1):
@@ -28,12 +28,13 @@ class Retriever:
         self.similarity_threshold = similarity_threshold
         self.logger = logger
     
-    def retrieve_relevant_chunks(self, query: str) -> Dict[str, Any]:
+    def retrieve_relevant_chunks(self, query: str, user_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Retrieve relevant document chunks for a given query.
         
         Args:
             query: User's question/query
+            user_id: Optional user ID for user-specific retrieval
             
         Returns:
             Dictionary with retrieved chunks and metadata
@@ -45,10 +46,11 @@ class Retriever:
             # Clean query
             clean_query = query.strip()
             
-            # Query the vector store
+            # Query the vector store (with user_id for isolation)
             results = self.vector_store.query(
                 query_text=clean_query,
-                n_results=self.top_k
+                n_results=self.top_k,
+                user_id=user_id
             )
             
             # Check if we got any results
@@ -102,22 +104,29 @@ class Retriever:
                 "message": "Error occurred during retrieval"
             }
     
-    def format_context(self, chunks: List[str]) -> str:
+    def format_context(self, chunks: List[str], conversation_history: str = "") -> str:
         """
         Format retrieved chunks into a context string for the LLM.
         
         Args:
             chunks: List of retrieved document chunks
+            conversation_history: Optional formatted conversation history
             
         Returns:
             Formatted context string
         """
         if not chunks:
-            return ""
+            return conversation_history if conversation_history else ""
         
         # Combine chunks with clear separation
         context_parts = []
         for i, chunk in enumerate(chunks, 1):
             context_parts.append(f"Document {i}:\n{chunk.strip()}")
         
-        return "\n\n".join(context_parts)
+        document_context = "\n\n".join(context_parts)
+        
+        # Include conversation history if available
+        if conversation_history:
+            return f"{conversation_history}\n\n---\n\nRelevant document content:\n{document_context}"
+        
+        return document_context

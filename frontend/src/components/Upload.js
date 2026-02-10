@@ -1,10 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { useAuth } from '../context/AuthContext';
 import './Upload.css';
+
+const API_URL = 'http://localhost:8000';
 
 const Upload = ({ onUploadSuccess, onUploadError }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const { token, isAuthenticated } = useAuth();
 
   const onDrop = useCallback(async (acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -28,12 +32,20 @@ const Upload = ({ onUploadSuccess, onUploadError }) => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://localhost:8000/upload_pdf', {
+      // Use authenticated endpoint if logged in, otherwise use legacy endpoint
+      const endpoint = isAuthenticated 
+        ? `${API_URL}/documents/upload` 
+        : `${API_URL}/upload_pdf`;
+      
+      const headers = {};
+      if (isAuthenticated && token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
-        headers: {
-          // Don't set Content-Type, let browser set it for FormData
-        }
+        headers
       });
 
       if (!response.ok) {
@@ -48,7 +60,6 @@ const Upload = ({ onUploadSuccess, onUploadError }) => {
             console.error('Failed to parse error JSON:', jsonError);
           }
         } else {
-          // Handle non-JSON error responses
           const errorText = await response.text();
           console.error('Non-JSON error response:', errorText);
           errorMessage = `Server error (${response.status}): ${response.statusText}`;
@@ -74,7 +85,7 @@ const Upload = ({ onUploadSuccess, onUploadError }) => {
     } finally {
       setIsUploading(false);
     }
-  }, [onUploadSuccess, onUploadError]);
+  }, [onUploadSuccess, onUploadError, token, isAuthenticated]);
 
   const {
     getRootProps,

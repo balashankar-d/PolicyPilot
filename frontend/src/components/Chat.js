@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Message from './Message';
+import { useAuth } from '../context/AuthContext';
 import './Chat.css';
+
+const API_URL = 'http://localhost:8000';
 
 const Chat = ({ messages, onNewMessage, isDocumentUploaded }) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const { token, isAuthenticated } = useAuth();
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -24,7 +27,6 @@ const Chat = ({ messages, onNewMessage, isDocumentUploaded }) => {
       return;
     }
 
-    // Add user message
     const userMessage = {
       text: query,
       sender: 'user',
@@ -36,11 +38,21 @@ const Chat = ({ messages, onNewMessage, isDocumentUploaded }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/query', {
+      // Use authenticated endpoint if logged in, otherwise use legacy endpoint
+      const endpoint = isAuthenticated 
+        ? `${API_URL}/chat/query` 
+        : `${API_URL}/query`;
+      
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      if (isAuthenticated && token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ query }),
       });
 
@@ -51,7 +63,6 @@ const Chat = ({ messages, onNewMessage, isDocumentUploaded }) => {
 
       const result = await response.json();
       
-      // Add bot response
       const botMessage = {
         text: result.answer,
         sender: 'bot',
@@ -65,7 +76,6 @@ const Chat = ({ messages, onNewMessage, isDocumentUploaded }) => {
     } catch (error) {
       console.error('Query error:', error);
       
-      // Add error message
       const errorMessage = {
         text: 'Sorry, I encountered an error while processing your question. Please try again.',
         sender: 'bot',

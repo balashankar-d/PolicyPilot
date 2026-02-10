@@ -1,7 +1,7 @@
-"""LLM client for Groq API integration."""
+"""LLM client for Groq API integration with conversation memory support."""
 
 from groq import Groq
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,35 +29,56 @@ class GroqLLMClient:
             self.logger.error(f"Failed to initialize Groq client: {str(e)}")
             raise
     
-    def build_prompt(self, query: str, context: str) -> str:
+    def build_prompt(self, query: str, context: str, chat_history: str = "") -> str:
         """
-        Build the prompt for the LLM following the instructions format.
+        Build the prompt for the LLM following the MANDATORY prompt template.
+        
+        This follows the exact structure specified in instructions.md for
+        hallucination control and grounded answers.
         
         Args:
-            query: User's question
+            query: User's current question
             context: Retrieved document context
+            chat_history: Previous conversation context (optional)
             
         Returns:
             Formatted prompt string
         """
-        # Exact prompt format as specified in instructions.md
-        prompt = f"""Answer the user question based on the content provided below:
-Content: {context}
-If the content doesn't have the answer, respond: "Sorry, this document doesn't contain enough information to answer that."
+        # MANDATORY prompt template as specified in the task requirements
+        prompt = """You are a document-based assistant.
 
-Question: {query}
+You MUST answer only using:
+1. Retrieved document content
+2. Relevant previous conversation context
 
-Answer:"""
+Do NOT use external knowledge.
+
+If the answer is not present, respond exactly with:
+"Sorry, this document does not contain enough information to answer that."
+
+"""
+        # Add previous conversation if available
+        if chat_history and chat_history.strip():
+            prompt += f"Previous Conversation:\n{chat_history.strip()}\n\n"
+        else:
+            prompt += "Previous Conversation:\nNo previous conversation.\n\n"
+        
+        # Add document context
+        prompt += f"Document Context:\n{context.strip()}\n\n"
+        
+        # Add current question
+        prompt += f"User Question:\n{query.strip()}\n\nAnswer:"
         
         return prompt
     
-    def generate_answer(self, query: str, context: str) -> Dict[str, Any]:
+    def generate_answer(self, query: str, context: str, chat_history: str = "") -> Dict[str, Any]:
         """
-        Generate an answer using the Groq API.
+        Generate an answer using the Groq API with conversation memory support.
         
         Args:
             query: User's question
             context: Retrieved document context
+            chat_history: Previous conversation history (optional)
             
         Returns:
             Dictionary containing the answer and metadata
@@ -68,7 +89,7 @@ Answer:"""
             
             # If no context, return fallback response immediately
             if not context or not context.strip():
-                fallback_response = "Sorry, this document doesn't contain enough information to answer that."
+                fallback_response = "Sorry, this document does not contain enough information to answer that."
                 self.logger.warning("No context provided, returning fallback response")
                 return {
                     "answer": fallback_response,
@@ -77,8 +98,8 @@ Answer:"""
                     "message": "No relevant context found"
                 }
             
-            # Build the prompt
-            prompt = self.build_prompt(query.strip(), context.strip())
+            # Build the prompt with conversation history
+            prompt = self.build_prompt(query.strip(), context.strip(), chat_history)
             
             # Call Groq API
             response = self.client.chat.completions.create(
@@ -86,7 +107,7 @@ Answer:"""
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful assistant that answers questions based strictly on the provided content. Never use external knowledge."
+                        "content": "You are a helpful document-based assistant. You answer questions ONLY using the provided document content and previous conversation context. Never use external knowledge. If the answer is not in the provided content, say so clearly."
                     },
                     {
                         "role": "user",
