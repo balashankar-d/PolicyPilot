@@ -33,42 +33,63 @@ class GroqLLMClient:
         """
         Build the prompt for the LLM following the MANDATORY prompt template.
         
-        This follows the exact structure specified in instructions.md for
-        hallucination control and grounded answers.
+        The context block arriving here is *enriched* — it already contains
+        clearly labelled sections:
+          [User Context]          – profile, preferences, memories
+          [Conversation History]  – recent Q&A pairs (and optional summary)
+          [Retrieved Documents]   – top-ranked document chunks
+        
+        This method wraps them with explicit instructions so the LLM knows
+        exactly how to leverage each section for personalised, follow-up-aware
+        answers.
         
         Args:
             query: User's current question
-            context: Retrieved document context
-            chat_history: Previous conversation context (optional)
+            context: Enriched context string with labelled sections
+            chat_history: Additional chat history override (optional)
             
         Returns:
             Formatted prompt string
         """
-        # MANDATORY prompt template as specified in the task requirements
-        prompt = """You are a document-based assistant.
+        prompt = """You are a document-based policy assistant called PolicyPilot.
 
-You MUST answer only using:
-1. Retrieved document content
-2. Relevant previous conversation context
-
-Do NOT use external knowledge.
-
-If the answer is not present, respond exactly with:
-"Sorry, this document does not contain enough information to answer that."
+RULES — follow them strictly:
+1. Base your answers primarily on the [Retrieved Documents] provided below.
+2. If [User Context] is present, PERSONALIZE your answer to the user's
+   specific situation (e.g. their state, occupation, income, category, age).
+   Address the user by name if known. Every policy fact you state must
+   still come from the [Retrieved Documents].
+3. If [Conversation History] is present, use it to resolve follow-up
+   questions. When the user says things like "tell me more", "what about
+   eligibility?", "explain that", "can you summarize that?", or uses
+   pronouns like "it" or "that", look at the previous Q&A exchanges in the
+   Conversation History to understand what they are referring to, and
+   answer accordingly.  You MAY use information from your previous answers
+   in the conversation history to provide continuity.
+4. For greetings, clarifications, or conversational messages (e.g. "hi",
+   "thanks", "who are you?"), respond naturally and helpfully.  You do NOT
+   need to cite documents for these.
+5. When quoting a policy or rule from documents, mention the source document
+   name if known.
+6. ONLY if the user asks a specific policy/document question AND neither the
+   [Retrieved Documents] nor the [Conversation History] contain relevant
+   information, respond with:
+   "Sorry, this document does not contain enough information to answer that."
+7. Do NOT fabricate policy details that are not in the provided context.
+8. Keep answers concise, clear, and well-structured.
 
 """
-        # Add previous conversation if available
+        # Chat history (if supplied separately — the enriched context already
+        # contains history, but the caller may pass an override)
         if chat_history and chat_history.strip():
             prompt += f"Previous Conversation:\n{chat_history.strip()}\n\n"
-        else:
-            prompt += "Previous Conversation:\nNo previous conversation.\n\n"
-        
-        # Add document context
-        prompt += f"Document Context:\n{context.strip()}\n\n"
-        
-        # Add current question
+
+        # Main context block (already includes user context + history + docs)
+        prompt += f"Context:\n{context.strip()}\n\n"
+
+        # Current question
         prompt += f"User Question:\n{query.strip()}\n\nAnswer:"
-        
+
         return prompt
     
     def generate_answer(self, query: str, context: str, chat_history: str = "") -> Dict[str, Any]:
@@ -107,7 +128,25 @@ If the answer is not present, respond exactly with:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a helpful document-based assistant. You answer questions ONLY using the provided document content and previous conversation context. Never use external knowledge. If the answer is not in the provided content, say so clearly."
+                        "content": (
+                            "You are PolicyPilot, a helpful document-based policy assistant. "
+                            "You answer policy questions using the provided [Retrieved Documents] "
+                            "and do not fabricate policy details.\n\n"
+                            "PERSONALIZATION: If a [User Context] section is present, tailor "
+                            "your answer to the user's profile (state, occupation, income, "
+                            "category, age, name, etc.).\n\n"
+                            "FOLLOW-UPS & CONVERSATION: If a [Conversation History] section is "
+                            "present, use it to resolve follow-up questions. When the user says "
+                            "'tell me more', 'what about eligibility?', 'explain that', or uses "
+                            "pronouns like 'it'/'that', refer to the previous exchanges to "
+                            "understand the topic and answer in full context. You may reference "
+                            "information from your own prior answers in the history.\n\n"
+                            "GREETINGS & CHAT: For greetings, thanks, or conversational messages, "
+                            "respond naturally. You do NOT need document citations for these.\n\n"
+                            "CITATIONS: Cite the source document name when quoting policy.\n\n"
+                            "Only say you cannot answer if the user asks a specific policy question "
+                            "and neither the documents nor conversation history contain the answer."
+                        )
                     },
                     {
                         "role": "user",

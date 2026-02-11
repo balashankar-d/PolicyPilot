@@ -14,14 +14,20 @@ logger = logging.getLogger(__name__)
 class ConversationMemory:
     """Manages conversation history for RAG context enhancement."""
     
-    def __init__(self, max_history_items: int = 5):
+    def __init__(self, max_history_items: int = 5, summary_threshold: int = 8):
         """
         Initialize conversation memory.
         
         Args:
-            max_history_items: Maximum number of previous Q&A pairs to include in context
+            max_history_items: Maximum number of recent Q&A pairs to include verbatim in context
+            summary_threshold: When total fetched history exceeds this, older items are summarized
         """
         self.max_history_items = max_history_items
+        self.summary_threshold = summary_threshold
+        # We fetch MORE items from DB than we display verbatim so that
+        # the summary branch can actually trigger, and so we can surface
+        # the full window for follow-up resolution.
+        self.fetch_limit = max(max_history_items * 3, summary_threshold + 4)
         self.logger = logger
     
     def save_conversation(
@@ -79,17 +85,20 @@ class ConversationMemory:
         """
         Get recent conversation history for a user.
         
+        Fetches a generous window (self.fetch_limit) so the summary /
+        follow-up-resolution logic has enough material to work with.
+        
         Args:
             db: Database session
             user_id: User ID
-            limit: Maximum number of items to retrieve (defaults to max_history_items)
+            limit: Override for the number of items to retrieve
             
         Returns:
-            List of conversation dictionaries with question and answer
+            List of conversation dictionaries in chronological order
         """
         try:
             if limit is None:
-                limit = self.max_history_items
+                limit = self.fetch_limit
             
             history = (
                 db.query(ChatHistory)
@@ -118,12 +127,45 @@ class ConversationMemory:
             self.logger.error(f"Error retrieving history: {str(e)}")
             return []
     
+    def get_last_exchange(self, db: Session, user_id: int) -> Optional[Dict]:
+        """
+        Return the single most-recent successful Q&A pair.
+        
+        This is used by the intent extractor and the retrieval step
+        to resolve follow-up references ("tell me more", "what about
+        eligibility for that?").
+        """
+        try:
+            item = (
+                db.query(ChatHistory)
+                .filter(ChatHistory.user_id == user_id)
+                .filter(ChatHistory.was_successful == True)
+                .order_by(ChatHistory.created_at.desc())
+                .first()
+            )
+            if not item:
+                return None
+            return {
+                "question": item.question,
+                "answer": item.answer,
+                "timestamp": item.created_at.isoformat(),
+            }
+        except Exception as e:
+            self.logger.error(f"Error fetching last exchange: {e}")
+            return None
+    
     def format_history_context(self, history: List[Dict]) -> str:
         """
-        Format conversation history as context string for the LLM.
+        Format conversation history as a context string for the LLM.
+        
+        Strategy:
+          - If total items ≤ summary_threshold: include all verbatim.
+          - If total items > summary_threshold: summarize the older items and
+            keep the most recent max_history_items verbatim so the LLM can
+            resolve follow-up references.
         
         Args:
-            history: List of conversation dictionaries
+            history: List of conversation dicts (chronological)
             
         Returns:
             Formatted string of previous conversations
@@ -131,12 +173,48 @@ class ConversationMemory:
         if not history:
             return ""
         
-        formatted = "Previous conversation:\n"
+        if len(history) > self.summary_threshold:
+            older = history[:-self.max_history_items]
+            recent = history[-self.max_history_items:]
+            
+            summary = self._summarize_history(older)
+            formatted = f"Summary of earlier conversation:\n{summary}\n\n"
+            formatted += "Recent conversation (use this to resolve follow-up references):\n"
+            for i, item in enumerate(recent, 1):
+                formatted += f"User: {item['question']}\n"
+                formatted += f"Assistant: {item['answer']}\n\n"
+            return formatted.strip()
+        
+        formatted = "Conversation history (use this to resolve follow-up references):\n"
         for i, item in enumerate(history, 1):
-            formatted += f"Q{i}: {item['question']}\n"
-            formatted += f"A{i}: {item['answer']}\n\n"
+            formatted += f"User: {item['question']}\n"
+            formatted += f"Assistant: {item['answer']}\n\n"
         
         return formatted.strip()
+    
+    def _summarize_history(self, history: List[Dict]) -> str:
+        """
+        Create a compact summary of older conversation history.
+        Uses extractive summarization (key topics) to stay lightweight.
+        
+        Args:
+            history: Older conversation items to summarize
+            
+        Returns:
+            Compact summary string
+        """
+        if not history:
+            return "No earlier conversation."
+        
+        topics = []
+        for item in history:
+            # Extract the core question topic (first 80 chars)
+            q = item["question"].strip()
+            if len(q) > 80:
+                q = q[:77] + "..."
+            topics.append(f"- Asked about: {q}")
+        
+        return "The user previously discussed:\n" + "\n".join(topics)
     
     def clear_user_history(self, db: Session, user_id: int) -> int:
         """

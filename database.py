@@ -1,6 +1,6 @@
 """Database models and session management using SQLAlchemy."""
 
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -38,6 +38,8 @@ class User(Base):
     # Relationships
     documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
     chat_history = relationship("ChatHistory", back_populates="user", cascade="all, delete-orphan")
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    memories = relationship("UserMemory", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}')>"
@@ -82,6 +84,51 @@ class ChatHistory(Base):
     
     def __repr__(self):
         return f"<ChatHistory(id={self.id}, user_id={self.user_id})>"
+
+
+class UserProfile(Base):
+    """User profile model for personalized responses."""
+    
+    __tablename__ = "user_profiles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=True)
+    state = Column(String(255), nullable=True)
+    occupation = Column(String(255), nullable=True)
+    income = Column(String(255), nullable=True)
+    age = Column(Integer, nullable=True)
+    category = Column(String(255), nullable=True)  # farmer, student, senior citizen, etc.
+    preferences = Column(Text, nullable=True)  # JSON string for additional preferences
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="profile")
+    
+    def __repr__(self):
+        return f"<UserProfile(user_id={self.user_id}, name='{self.name}')>"
+
+
+class UserMemory(Base):
+    """Key-value memory store for user-specific information extracted from conversations."""
+    
+    __tablename__ = "user_memories"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    memory_key = Column(String(255), nullable=False)
+    memory_value = Column(Text, nullable=False)
+    source = Column(String(50), default="conversation")  # conversation, profile, system
+    confidence = Column(Float, default=1.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="memories")
+    
+    def __repr__(self):
+        return f"<UserMemory(user_id={self.user_id}, key='{self.memory_key}')>"
 
 
 def create_tables():

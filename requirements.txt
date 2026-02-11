@@ -17,3 +17,6 @@ passlib>=1.7.4
 bcrypt>=4.1.2
 python-jose>=3.3.0
 email-validator>=2.0.0
+# LangChain (for advanced chaining)
+langchain>=0.1.0
+langchain-community>=0.0.10

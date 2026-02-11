@@ -22,8 +22,15 @@ class EmbeddingModel:
         self.logger = logger
         
         try:
-            self.model = SentenceTransformer(model_name)
-            self.logger.info(f"Loaded embedding model: {model_name}")
+            # Try loading from local cache first (works offline),
+            # fall back to downloading if cache miss
+            try:
+                self.model = SentenceTransformer(model_name, local_files_only=True)
+                self.logger.info(f"Loaded embedding model from cache: {model_name}")
+            except Exception:
+                self.logger.info(f"Cache miss, downloading embedding model: {model_name}")
+                self.model = SentenceTransformer(model_name)
+                self.logger.info(f"Downloaded and loaded embedding model: {model_name}")
         except Exception as e:
             self.logger.error(f"Failed to load embedding model {model_name}: {str(e)}")
             raise

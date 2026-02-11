@@ -1,0 +1,319 @@
+/* ===== Profile Settings Overlay ===== */
+
+.profile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.profile-panel {
+  background: #fff;
+  border-radius: 16px;
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  animation: panelIn 0.22s ease-out;
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Header */
+.profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+}
+
+.profile-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1E293B;
+}
+
+.profile-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #94A3B8;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.profile-close:hover {
+  background: #F1F5F9;
+  color: #475569;
+}
+
+/* Tabs */
+.profile-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 24px 8px;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.profile-tab {
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #64748B;
+  transition: background 0.15s, color 0.15s;
+}
+
+.profile-tab:hover {
+  background: #F1F5F9;
+}
+
+.profile-tab.active {
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+/* Body */
+.profile-body {
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.profile-hint {
+  font-size: 0.82rem;
+  color: #94A3B8;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+/* Profile Grid */
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.profile-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-grid label span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.profile-grid input,
+.profile-grid select {
+  padding: 8px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #1E293B;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #F8FAFC;
+}
+
+.profile-grid input:focus,
+.profile-grid select:focus {
+  border-color: #818CF8;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.profile-grid input::placeholder {
+  color: #CBD5E1;
+}
+
+/* Actions */
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.profile-save {
+  padding: 10px 28px;
+  background: linear-gradient(135deg, #6366F1, #4F46E5);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.profile-save:hover {
+  opacity: 0.9;
+}
+
+.profile-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-msg {
+  font-size: 0.82rem;
+  color: #22C55E;
+  font-weight: 500;
+}
+
+/* ===== Memory Tab ===== */
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.memory-empty {
+  color: #94A3B8;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.memory-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #F8FAFC;
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+}
+
+.memory-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.memory-key {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6366F1;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.memory-value {
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.memory-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.memory-delete:hover {
+  opacity: 1;
+}
+
+/* Add memory */
+.memory-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.memory-add-key,
+.memory-add-value {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: #F8FAFC;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.memory-add-key:focus,
+.memory-add-value:focus {
+  border-color: #818CF8;
+}
+
+.memory-add-btn {
+  padding: 8px 16px;
+  background: #6366F1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.memory-add-btn:hover {
+  opacity: 0.9;
+}
+
+.memory-clear {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: 1px solid #FCA5A5;
+  color: #EF4444;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.memory-clear:hover {
+  background: #FEF2F2;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 500px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .memory-add {
+    flex-direction: column;
+  }
+}

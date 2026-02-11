@@ -1,11 +1,15 @@
 """
-RAG Chatbot API with User Authentication and Conversation Memory.
+Advanced Conversational RAG Chatbot API with Personalized Memory.
 
 This module provides the FastAPI application with:
 - User authentication (signup, login, JWT)
 - User-specific document storage and retrieval
-- Conversation memory for follow-up questions
-- RAG pipeline with hallucination control
+- Persistent conversational memory with summarization
+- Personalized user profiles and key-value memory
+- Intent & entity extraction from queries
+- Chunk re-ranking for improved relevance
+- Response validation / hallucination guard
+- Multi-step RAG chain orchestration
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, status
@@ -34,6 +38,11 @@ from vector_store import VectorStore
 from retrieval import Retriever
 from llm_client import GroqLLMClient
 from conversation_memory import ConversationMemory
+from intent_extractor import IntentExtractor
+from user_memory import UserMemoryManager
+from reranker import ChunkReranker
+from response_validator import ResponseValidator
+from rag_chain import RAGChain
 
 # Configure logging
 logging.basicConfig(
@@ -47,8 +56,8 @@ create_tables()
 
 app = FastAPI(
     title="PolicyPilot RAG Chatbot API",
-    description="Retrieval-Augmented Generation chatbot with user authentication and conversation memory",
-    version="2.0.0"
+    description="Advanced conversational RAG chatbot with personalization, memory, and hallucination control",
+    version="3.0.0"
 )
 
 # CORS configuration
@@ -74,7 +83,26 @@ retriever = Retriever(vector_store, embedding_model, settings.top_k_results)
 llm_client = GroqLLMClient(settings.groq_api_key, settings.model_name)
 conversation_memory = ConversationMemory(max_history_items=settings.max_history_items)
 
-logger.info("PolicyPilot RAG Chatbot API initialized successfully")
+# Advanced pipeline components
+from groq import Groq as _Groq
+_groq_raw = _Groq(api_key=settings.groq_api_key)
+intent_extractor = IntentExtractor(client=_groq_raw, model_name=settings.model_name)
+user_memory_manager = UserMemoryManager()
+reranker = ChunkReranker(top_n=3, use_cross_encoder=False)  # keyword-based by default
+response_validator = ResponseValidator(min_grounding_ratio=0.10)
+
+# RAG Chain orchestrator
+rag_chain = RAGChain(
+    retriever=retriever,
+    llm_client=llm_client,
+    conversation_memory=conversation_memory,
+    intent_extractor=intent_extractor,
+    user_memory_manager=user_memory_manager,
+    reranker=reranker,
+    response_validator=response_validator,
+)
+
+logger.info("PolicyPilot RAG Chatbot API initialized successfully (advanced pipeline)")
 
 
 # ============== Pydantic Schemas ==============
@@ -124,6 +152,52 @@ class UserStatsResponse(BaseModel):
     successful_conversations: int
 
 
+class AdvancedQueryResponse(BaseModel):
+    """Extended response with validation and personalization metadata."""
+    answer: str
+    sources: list
+    success: bool
+    message: str
+    intent: str = "question"
+    confidence: str = "unknown"
+    is_grounded: bool = False
+    flags: list = []
+
+
+class ProfileUpdateRequest(BaseModel):
+    """Request body for updating user profile."""
+    name: Optional[str] = None
+    state: Optional[str] = None
+    occupation: Optional[str] = None
+    income: Optional[str] = None
+    age: Optional[int] = None
+    category: Optional[str] = None
+    preferences: Optional[str] = None
+
+
+class ProfileResponse(BaseModel):
+    """User profile response."""
+    name: Optional[str] = None
+    state: Optional[str] = None
+    occupation: Optional[str] = None
+    income: Optional[str] = None
+    age: Optional[int] = None
+    category: Optional[str] = None
+    preferences: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class MemoryEntry(BaseModel):
+    key: str
+    value: str
+
+
+class MemoryResponse(BaseModel):
+    memories: Dict[str, str]
+
+
 # ============== Public Endpoints ==============
 
 @app.get("/")
@@ -131,7 +205,7 @@ async def root():
     """Root endpoint."""
     return {
         "message": "PolicyPilot RAG Chatbot API",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "endpoints": {
             "auth": {
                 "signup": "POST /auth/signup",
@@ -145,8 +219,19 @@ async def root():
             },
             "chat": {
                 "query": "POST /chat/query",
+                "advanced_query": "POST /chat/advanced-query",
                 "history": "GET /chat/history",
                 "clear": "DELETE /chat/history"
+            },
+            "profile": {
+                "get": "GET /profile",
+                "update": "PUT /profile"
+            },
+            "memory": {
+                "list": "GET /memory",
+                "store": "POST /memory",
+                "delete": "DELETE /memory/{key}",
+                "clear": "DELETE /memory"
             },
             "status": "GET /status"
         }
@@ -164,7 +249,7 @@ async def get_status():
             "documents_in_store": doc_count,
             "model": settings.model_name,
             "embedding_model": settings.embedding_model,
-            "version": "2.0.0"
+            "version": "3.0.0"
         }
     except Exception as e:
         logger.error(f"Status check failed: {str(e)}")
@@ -387,10 +472,10 @@ async def query_documents(
 ):
     """
     Query the user's document store and generate an answer.
-    Implements RAG pipeline with conversation memory and hallucination control.
+    Uses the basic RAG pipeline for backward-compatible response format.
+    Internally delegates to the advanced RAG chain.
     """
     try:
-        # Validate input
         if not request.query or not request.query.strip():
             raise HTTPException(status_code=400, detail="Query cannot be empty")
         
@@ -407,54 +492,14 @@ async def query_documents(
                 message="No documents available"
             )
         
-        # Get conversation history for context
-        history = conversation_memory.get_recent_history(db, current_user.id)
-        history_context = conversation_memory.format_history_context(history)
-        
-        # Retrieve relevant chunks from user's documents
-        retrieval_result = retriever.retrieve_relevant_chunks(query, user_id=current_user.id)
-        logger.info(f"Retrieval: relevant={retrieval_result['is_relevant']}, chunks={len(retrieval_result['chunks'])}")
-        
-        # Check if we found relevant content
-        if not retrieval_result["is_relevant"] or not retrieval_result["chunks"]:
-            fallback_response = "Sorry, this document doesn't contain enough information to answer that."
-            
-            # Save to conversation history
-            conversation_memory.save_conversation(
-                db, current_user.id, query, fallback_response,
-                sources=[], was_successful=False
-            )
-            
-            return QueryResponse(
-                answer=fallback_response,
-                sources=[],
-                success=True,
-                message="No relevant information found"
-            )
-        
-        # Format context with conversation history
-        context = retriever.format_context(
-            retrieval_result["chunks"],
-            conversation_history=history_context
-        )
-        logger.info(f"Context length: {len(context)} characters")
-        
-        # Generate answer using LLM
-        llm_result = llm_client.generate_answer(query, context)
-        logger.info(f"LLM result: success={llm_result['success']}")
-        
-        # Save to conversation history
-        conversation_memory.save_conversation(
-            db, current_user.id, query, llm_result["answer"],
-            sources=retrieval_result["sources"],
-            was_successful=llm_result["success"]
-        )
+        # Run the full advanced RAG chain
+        result = rag_chain.run(query, current_user.id, db)
         
         return QueryResponse(
-            answer=llm_result["answer"],
-            sources=retrieval_result["sources"],
-            success=llm_result["success"],
-            message=llm_result["message"]
+            answer=result["answer"],
+            sources=result["sources"],
+            success=result["success"],
+            message=result["message"],
         )
         
     except HTTPException:
@@ -467,6 +512,56 @@ async def query_documents(
             sources=[],
             success=False,
             message=f"Error occurred: {str(e)}"
+        )
+
+
+@app.post("/chat/advanced-query", response_model=AdvancedQueryResponse)
+async def advanced_query_documents(
+    request: QueryRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Advanced query endpoint with full pipeline metadata.
+    Returns intent, confidence, grounding status, and flags.
+    """
+    try:
+        if not request.query or not request.query.strip():
+            raise HTTPException(status_code=400, detail="Query cannot be empty")
+        
+        query = request.query.strip()
+        logger.info(f"Advanced query from {current_user.email}: {query[:100]}...")
+        
+        doc_count = vector_store.get_collection_count(user_id=current_user.id)
+        if doc_count == 0:
+            return AdvancedQueryResponse(
+                answer="Please upload a PDF document first before asking questions.",
+                sources=[],
+                success=True,
+                message="No documents available",
+                intent="question",
+                confidence="high",
+                is_grounded=True,
+                flags=["no_documents"],
+            )
+        
+        result = rag_chain.run(query, current_user.id, db)
+        
+        return AdvancedQueryResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Advanced query error: {str(e)}")
+        return AdvancedQueryResponse(
+            answer="Sorry, this document doesn't contain enough information to answer that.",
+            sources=[],
+            success=False,
+            message=f"Error occurred: {str(e)}",
+            intent="question",
+            confidence="none",
+            is_grounded=False,
+            flags=["error"],
         )
 
 
@@ -528,6 +623,98 @@ async def get_user_stats(
         total_conversations=chat_stats["total_conversations"],
         successful_conversations=chat_stats["successful_conversations"]
     )
+
+
+# ============== Profile & Memory Endpoints (Protected) ==============
+
+@app.get("/profile", response_model=ProfileResponse)
+async def get_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get the current user's profile."""
+    profile = user_memory_manager.get_profile(db, current_user.id)
+    if not profile:
+        return ProfileResponse()
+    return ProfileResponse(
+        name=profile.name,
+        state=profile.state,
+        occupation=profile.occupation,
+        income=profile.income,
+        age=profile.age,
+        category=profile.category,
+        preferences=profile.preferences,
+    )
+
+
+@app.put("/profile", response_model=ProfileResponse)
+async def update_profile(
+    data: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create or update the current user's profile."""
+    update_data = data.model_dump(exclude_none=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No profile fields provided")
+    
+    profile = user_memory_manager.update_profile(db, current_user.id, update_data)
+    logger.info(f"Profile updated for user {current_user.email}")
+    return ProfileResponse(
+        name=profile.name,
+        state=profile.state,
+        occupation=profile.occupation,
+        income=profile.income,
+        age=profile.age,
+        category=profile.category,
+        preferences=profile.preferences,
+    )
+
+
+@app.get("/memory", response_model=MemoryResponse)
+async def get_memories(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all stored memories for the current user."""
+    memories = user_memory_manager.get_memories(db, current_user.id)
+    return MemoryResponse(memories=memories)
+
+
+@app.post("/memory")
+async def store_memory(
+    entry: MemoryEntry,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Store a key-value memory for the current user."""
+    user_memory_manager.store_memory(
+        db, current_user.id, entry.key, entry.value, source="manual"
+    )
+    return {"message": f"Memory '{entry.key}' stored successfully"}
+
+
+@app.delete("/memory/{key}")
+async def delete_memory(
+    key: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a specific memory entry."""
+    deleted = user_memory_manager.delete_memory(db, current_user.id, key)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Memory '{key}' not found")
+    return {"message": f"Memory '{key}' deleted successfully"}
+
+
+@app.delete("/memory")
+async def clear_all_memories(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Clear all memories for the current user."""
+    count = user_memory_manager.clear_memories(db, current_user.id)
+    return {"message": f"Cleared {count} memory entries"}
 
 
 # ============== Legacy Endpoints (For Backward Compatibility) ==============
